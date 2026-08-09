@@ -3,10 +3,15 @@ from app.database.mongodb import students_collection
 from app.schemas.student import Student
 
 def clean_student(student):
-    if student:
-        student.pop("_id", None)
+    if student is None:
+        return None
 
-    return student
+    return {
+        key: value
+        for key, value in student.items()
+        if key != "_id"
+    }
+
 
 def get_all_students():
     students=students_collection.find()
