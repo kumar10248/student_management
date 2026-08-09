@@ -1,31 +1,76 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.student import Student
-from app.database.student_db import students
+from app.repositories.student_repository import (
+    get_all_students,
+    get_student_by_id,
+    update_student_by_id,
+    delete_student_by_id
 
+)
+
+from app.services.student_service import (
+    create_student_service,
+    InvalidStudentError
+    )
 router=APIRouter()
 
-@router.get("/students")
+@router.get("/students",response_model=list[Student])
 def get_students():
-    return students
+    
+    return get_all_students()
 
-@router.get("/students/{student_id}")
+@router.get("/students/{student_id}",response_model=Student)
 def get_student(student_id:int):
-    return students.get(student_id)
-
-@router.post("/students")
-def create_student(student:Student):
-    students[student.id]=student
+    student=get_student_by_id(student_id)
+    if student is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="student not found"
+        )
     return student
 
-@router.delete("/students/{student_id}")
+@router.post(
+        "/students",
+        status_code=status.HTTP_201_CREATED
+        )
+def create_student(student:Student):
+    try:
+        created_student=create_student_service(student)
+    except InvalidStudentError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error)
+        )
+    if created_student is None:
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Student already exists with id {student.id}"
+        )
+    return created_student
+@router.delete(
+        "/students/{student_id}",
+        status_code=status.HTTP_204_NO_CONTENT
+        )
 def remove_student(student_id:int):
-    return students.pop(student_id,"Student Id not found")
+    deleted_student=delete_student_by_id(student_id)
+    if deleted_student is None:
+        raise HTTPException(
+            tatus_code=status.HTTP_404_NOT_FOUND,
+            detail="student not found"
+        )
 
-@router.put("/students/{student_id}")
+@router.put("/students/{student_id}",response_model=Student,status_code=status.HTTP_200_OK)
 def update_student(student_id:int,student:Student):
-    if student_id not in students:
-        return "Student id not found"
-    students[student_id]=student.model_dump()
-        
-    return students[student_id]
+   if student_id != student.id:
+       raise HTTPException(
+           status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+           detail="Student ID in URL and request body must match"
+       )
+   updated_student=update_student_by_id(student_id,student)
+   if updated_student is None:
+       raise HTTPException(
+           status_code=status.HTTP_404_NOT_FOUND,
+           detail="Student not found"
+       )
+   return updated_student
